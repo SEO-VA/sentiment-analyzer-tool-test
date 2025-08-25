@@ -1,0 +1,13 @@
+[server]
+# Force file watching and auto-reload
+fileWatcherType = "poll"
+headless = true
+runOnSave = true
+
+# Development settings for better file watching
+[global]
+developmentMode = true
+
+# UI settings  
+[browser]
+gatherUsageStats = false
