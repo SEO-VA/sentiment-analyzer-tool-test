@@ -149,9 +149,56 @@ class ContentClassifier:
             for i in range(0, len(sentences), batch_size):
                 batch_num = (i // batch_size) + 1
                 batch = sentences[i:i + batch_size]
-                logger.info(f"Stage 1: Processing batch {batch_num}/{num_batches}")
+                logger.info(f"Stage 1: Processing batch {batch_num}/{num_batches} ({len(batch)} sentences)")
                 
                 batch_results = self.llm_client.classify_sentences_stage1(batch)
+                logger.info(f"Stage 1: Batch {batch_num} returned {len(batch_results)} results")
+                results.extend(batch_results)
+                
+                # Show progress if in debug mode
+                if self.debug_mode:
+                    progress = min(100, int((i + batch_size) / len(sentences) * 100))
+                    st.write(f"Stage 1 progress: {progress}%")
+        
+        # Log results summary
+        label_counts = {}
+        needs_phrase_count = 0
+        for result in results:
+            label = result['label']
+            label_counts[label] = label_counts.get(label, 0) + 1
+            if result.get('needs_phrase_level', False):
+                needs_phrase_count += 1
+        
+        logger.info(f"Stage 1 complete: {label_counts.get('info', 0)} info, {label_counts.get('promo', 0)} promo, {label_counts.get('risk', 0)} risk ({needs_phrase_count} flagged for Stage 2)")
+        
+        self._last_stage1_results = results  # For error recovery
+        return results avoid truncation
+        if len(sentences) > 20:
+            # Force smaller batches for reliability
+            batch_size = min(20, len(sentences))
+            logger.info(f"Stage 1: Forcing smaller batches due to size ({len(sentences)} sentences)")
+        else:
+            batch_size = self.llm_client.estimate_batch_size(sentences)
+        
+        total_tokens = sum(self.text_processor.estimate_tokens(s['text']) for s in sentences)
+        
+        if batch_size >= len(sentences):
+            # Process all at once
+            logger.info(f"Stage 1: Single batch ({len(sentences)} sentences, ~{total_tokens} tokens)")
+            results = self.llm_client.classify_sentences_stage1(sentences)
+        else:
+            # Process in batches
+            num_batches = (len(sentences) + batch_size - 1) // batch_size
+            logger.info(f"Stage 1: {num_batches} batches ({len(sentences)} sentences, ~{total_tokens} tokens)")
+            
+            results = []
+            for i in range(0, len(sentences), batch_size):
+                batch_num = (i // batch_size) + 1
+                batch = sentences[i:i + batch_size]
+                logger.info(f"Stage 1: Processing batch {batch_num}/{num_batches} ({len(batch)} sentences)")
+                
+                batch_results = self.llm_client.classify_sentences_stage1(batch)
+                logger.info(f"Stage 1: Batch {batch_num} returned {len(batch_results)} results")
                 results.extend(batch_results)
                 
                 # Show progress if in debug mode
