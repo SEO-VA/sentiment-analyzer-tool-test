@@ -13,8 +13,7 @@ class LLMClient:
     
     def __init__(self):
         self.client = OpenAI(api_key=st.secrets["openai_api_key"])
-        self.stage1_assistant_id = st.secrets["assistant_step_1_id"]
-        self.stage2_assistant_id = st.secrets["assistant_step_2_id"]
+        self.stage1_assistant_id = st.secrets["assistant_id"]
         self.max_retries = LLM_SETTINGS['max_retries']
     
     def classify_sentences_stage1(self, sentences: List[Dict[str, str]]) -> List[Dict[str, Any]]:
