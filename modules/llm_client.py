@@ -42,18 +42,24 @@ def call_openai_assistant(sentences: List[Dict[str, Any]]) -> List[Dict[str, Any
         )
         
         # Wait for completion
-        max_wait_time = 60  # seconds
+        max_wait_time = 180  # Increased to 3 minutes
         start_time = time.time()
+        poll_interval = 2  # Check every 2 seconds instead of 1
         
         while run.status in ['queued', 'in_progress']:
             if time.time() - start_time > max_wait_time:
-                raise Exception("Assistant call timed out")
+                raise Exception(f"Assistant call timed out after {max_wait_time} seconds")
                 
-            time.sleep(1)
+            time.sleep(poll_interval)
             run = client.beta.threads.runs.retrieve(
                 thread_id=thread.id, 
                 run_id=run.id
             )
+            
+            # Show progress for longer waits
+            elapsed = int(time.time() - start_time)
+            if elapsed > 30 and elapsed % 10 == 0:  # Every 10 seconds after 30s
+                logger.info(f"Still waiting for assistant response... ({elapsed}s elapsed)")
         
         if run.status == 'completed':
             # Get the assistant's response
