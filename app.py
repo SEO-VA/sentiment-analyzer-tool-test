@@ -183,7 +183,7 @@ def admin_workflow():
             elif i == current_step:
                 st.info(f"🔄 {name}")
             else:
-                st.gray(f"⏳ {name}")
+                st.write(f"⏳ {name}")
     
     st.markdown("---")
     
