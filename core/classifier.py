@@ -172,7 +172,7 @@ class ContentClassifier:
         logger.info(f"Stage 1 complete: {label_counts.get('info', 0)} info, {label_counts.get('promo', 0)} promo, {label_counts.get('risk', 0)} risk ({needs_phrase_count} flagged for Stage 2)")
         
         self._last_stage1_results = results  # For error recovery
-        return results avoid truncation
+        return results
         if len(sentences) > 20:
             # Force smaller batches for reliability
             batch_size = min(20, len(sentences))
