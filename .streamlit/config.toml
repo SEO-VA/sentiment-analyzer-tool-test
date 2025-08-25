@@ -1,0 +1,10 @@
+[server]
+# Automatically rerun script when the file is modified on disk
+runOnSave = true
+
+# Change the type of file watcher used by Streamlit
+fileWatcherType = "auto"
+
+[client]
+# Show full error details for debugging
+showErrorDetails = "full"
