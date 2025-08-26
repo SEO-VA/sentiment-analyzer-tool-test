@@ -65,31 +65,71 @@ def render_results(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]
     # Display the rendered content
     st.markdown(html_content, unsafe_allow_html=True)
 
+from modules.pdf_generator import generate_pdf_from_html, check_pdf_dependencies
+
 def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
                           webpage_data: Optional[Dict[str, Any]] = None):
     """
-    Generate downloadable HTML file with classification results
+    Generate downloadable HTML and PDF files with classification results
     """
     if webpage_data and webpage_data.get('success'):
         # Generate webpage-style HTML
         html_content = _generate_webpage_html(sentences, results, webpage_data)
-        filename = f"webpage_classification_{webpage_data.get('title', 'results')}.html"
+        filename_base = f"webpage_classification_{webpage_data.get('title', 'results')}"
     else:
         # Generate simple HTML
         html_content = _generate_simple_html(sentences, results)
-        filename = "text_classification_results.html"
+        filename_base = "text_classification_results"
     
     # Clean filename
     import re
-    filename = re.sub(r'[^\w\s-]', '', filename)
-    filename = re.sub(r'[-\s]+', '-', filename)
+    filename_base = re.sub(r'[^\w\s-]', '', filename_base)
+    filename_base = re.sub(r'[-\s]+', '-', filename_base)
     
-    st.download_button(
-        label="Download HTML",
-        data=html_content,
-        file_name=filename,
-        mime="text/html"
-    )
+    # Check PDF availability
+    pdf_status = check_pdf_dependencies()
+    
+    if pdf_status['available']:
+        # Create download buttons for both formats
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="Download HTML",
+                data=html_content,
+                file_name=f"{filename_base}.html",
+                mime="text/html"
+            )
+        
+        with col2:
+            # Generate PDF
+            try:
+                pdf_content = generate_pdf_from_html(html_content)
+                st.download_button(
+                    label="Download PDF",
+                    data=pdf_content,
+                    file_name=f"{filename_base}.pdf",
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"PDF generation failed: {str(e)}")
+                st.info("HTML download is still available above.")
+    else:
+        # Only HTML download available
+        st.download_button(
+            label="Download HTML",
+            data=html_content,
+            file_name=f"{filename_base}.html",
+            mime="text/html"
+        )
+        
+        # Show PDF unavailability notice
+        with st.expander("PDF Download Not Available", expanded=False):
+            st.warning("PDF generation requires additional dependencies.")
+            if pdf_status['missing_packages']:
+                st.write("Missing packages:", ", ".join(pdf_status['missing_packages']))
+            if pdf_status['error_message']:
+                st.code(pdf_status['error_message'])
 
 def _show_legend():
     """Display color legend"""
@@ -258,8 +298,26 @@ def _apply_spans_to_text(text: str, spans: List[Dict[str, Any]],
     return result_html if result_html else html.escape(text)
 
 def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]]) -> str:
-    """Generate simple HTML download"""
+    """Generate simple HTML download with percentages included"""
     color_map = {"info": "lightblue", "promo": "lightcoral", "risk": "lightgreen"}
+    
+    # Calculate percentages
+    char_counts = {"info": 0, "promo": 0, "risk": 0}
+    for result in results:
+        idx = result["idx"]
+        sentence = sentences[idx]["content"]
+        
+        if "spans" in result:
+            for span in result["spans"]:
+                char_count = span["end"] - span["start"]
+                char_counts[span["label"]] += char_count
+        else:
+            char_counts[result["label"]] += len(sentence)
+    
+    total_chars = sum(char_counts.values())
+    info_pct = round((char_counts["info"] / total_chars) * 100, 1) if total_chars > 0 else 0
+    promo_pct = round((char_counts["promo"] / total_chars) * 100, 1) if total_chars > 0 else 0
+    risk_pct = round((char_counts["risk"] / total_chars) * 100, 1) if total_chars > 0 else 0
     
     html_content = """<!DOCTYPE html>
 <html>
@@ -267,6 +325,22 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
     <title>Classification Results</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .stats { 
+            background-color: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        .stats h3 { margin-top: 0; margin-bottom: 15px; }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; 
+        }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
         .legend { margin-bottom: 20px; }
         .legend span { padding: 2px 6px; margin-right: 10px; border-radius: 3px; }
         .content { margin-top: 20px; }
@@ -274,12 +348,44 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
 </head>
 <body>
     <h1>Content Classification Results</h1>
+    
+    <div class="stats">
+        <h3>Classification Summary</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number" style="color:#0066cc">{info_count}</div>
+                <div class="stat-label">Informational ({info_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
+                <div class="stat-label">Promotional ({promo_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#cc4400">{risk_count}</div>
+                <div class="stat-label">Risk Warning ({risk_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{total_items}</div>
+                <div class="stat-label">Total Items</div>
+            </div>
+        </div>
+    </div>
+    
     <div class="legend">
+        <strong>Legend:</strong>
         <span style="background-color: lightblue;">Info</span>
         <span style="background-color: lightcoral;">Promo</span>
         <span style="background-color: lightgreen;">Risk</span>
     </div>
-    <div class="content">"""
+    <div class="content">""".format(
+        info_count=char_counts["info"],
+        promo_count=char_counts["promo"], 
+        risk_count=char_counts["risk"],
+        info_pct=info_pct,
+        promo_pct=promo_pct,
+        risk_pct=risk_pct,
+        total_items=len(results)
+    )
     
     for result in results:
         idx = result["idx"]
@@ -303,9 +409,27 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
 
 def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
                           webpage_data: Dict[str, Any]) -> str:
-    """Generate webpage-style HTML download with enhanced styling"""
+    """Generate webpage-style HTML download with enhanced styling and percentages"""
     title = webpage_data.get('title', 'Classification Results')
     url = webpage_data.get('url', '')
+    
+    # Calculate percentages
+    char_counts = {"info": 0, "promo": 0, "risk": 0}
+    for result in results:
+        idx = result["idx"]
+        sentence = sentences[idx]["content"]
+        
+        if "spans" in result:
+            for span in result["spans"]:
+                char_count = span["end"] - span["start"]
+                char_counts[span["label"]] += char_count
+        else:
+            char_counts[result["label"]] += len(sentence)
+    
+    total_chars = sum(char_counts.values())
+    info_pct = round((char_counts["info"] / total_chars) * 100, 1) if total_chars > 0 else 0
+    promo_pct = round((char_counts["promo"] / total_chars) * 100, 1) if total_chars > 0 else 0
+    risk_pct = round((char_counts["risk"] / total_chars) * 100, 1) if total_chars > 0 else 0
     
     # Get classified content
     content_html = _render_webpage_structure(sentences, results, webpage_data)
@@ -335,6 +459,22 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
             margin-bottom: 20px;
             border-left: 4px solid #0369a1;
         }}
+        .stats {{ 
+            background-color: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }}
+        .stats h3 {{ margin-top: 0; margin-bottom: 15px; }}
+        .stats-grid {{ 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; 
+        }}
+        .stat-item {{ text-align: center; }}
+        .stat-number {{ font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }}
+        .stat-label {{ font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }}
         .legend {{ 
             margin-bottom: 20px; 
             padding: 10px;
@@ -368,6 +508,28 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
             <h3>Source Page</h3>
             <p><strong>Title:</strong> {html.escape(title)}</p>
             {f'<p><strong>URL:</strong> <a href="{html.escape(url)}" target="_blank">{html.escape(url)}</a></p>' if url else ''}
+        </div>
+    </div>
+    
+    <div class="stats">
+        <h3>Classification Summary</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number" style="color:#0066cc">{char_counts["info"]}</div>
+                <div class="stat-label">Informational ({info_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#00aa44">{char_counts["promo"]}</div>
+                <div class="stat-label">Promotional ({promo_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#cc4400">{char_counts["risk"]}</div>
+                <div class="stat-label">Risk Warning ({risk_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{len(results)}</div>
+                <div class="stat-label">Total Items</div>
+            </div>
         </div>
     </div>
     
