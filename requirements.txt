@@ -13,5 +13,7 @@ lxml>=4.9.0
 selenium>=4.15.0
 webdriver-manager>=3.8.0
 
-# PDF generation
+# PDF generation (multiple options for different environments)
 weasyprint>=60.0
+reportlab>=4.0.0
+# pdfkit>=1.0.0  # Uncomment if wkhtmltopdf is available
