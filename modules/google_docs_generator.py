@@ -106,22 +106,29 @@ def _generate_rtf_content(sentences: List[Dict[str, Any]], results: List[Dict[st
     # Add classified content with highlighting
     rtf_content.append(r"{\b Classified Content:}\par")
     
-    for result in results:
-        idx = result["idx"]
-        sentence = sentences[idx]["content"]
-        
-        if "spans" in result:
-            # Handle phrase-level spans
-            for span in result["spans"]:
-                text_part = sentence[span["start"]:span["end"]]
-                color_code = _get_rtf_color_code(span["label"])
-                escaped_text = _rtf_escape(text_part)
-                rtf_content.append(f"{{\\highlight{color_code} {escaped_text}}}")
-        else:
-            # Handle sentence-level classification
-            color_code = _get_rtf_color_code(result["label"])
-            escaped_text = _rtf_escape(sentence)
-            rtf_content.append(f"{{\\highlight{color_code} {escaped_text}}} ")
+    # Check if we have webpage structure to preserve
+    if webpage_data and webpage_data.get('structure'):
+        # Use structure-aware rendering for RTF
+        structured_content = _generate_rtf_with_structure(sentences, results, webpage_data)
+        rtf_content.append(structured_content)
+    else:
+        # Use simple sentence-by-sentence rendering
+        for result in results:
+            idx = result["idx"]
+            sentence = sentences[idx]["content"]
+            
+            if "spans" in result:
+                # Handle phrase-level spans
+                for span in result["spans"]:
+                    text_part = sentence[span["start"]:span["end"]]
+                    color_code = _get_rtf_color_code(span["label"])
+                    escaped_text = _rtf_escape(text_part)
+                    rtf_content.append(f"{{\\highlight{color_code} {escaped_text}}}")
+            else:
+                # Handle sentence-level classification
+                color_code = _get_rtf_color_code(result["label"])
+                escaped_text = _rtf_escape(sentence)
+                rtf_content.append(f"{{\\highlight{color_code} {escaped_text}}} ")
     
     rtf_content.append("}")  # Close RTF document
     
@@ -199,22 +206,29 @@ def _generate_google_docs_html(sentences: List[Dict[str, Any]], results: List[Di
         '<div class="content">'
     ])
     
-    for result in results:
-        idx = result["idx"]
-        sentence = sentences[idx]["content"]
-        
-        if "spans" in result:
-            # Handle phrase-level spans
-            for span in result["spans"]:
-                text_part = sentence[span["start"]:span["end"]]
-                css_class = span["label"]  # 'info', 'promo', or 'risk'
-                escaped_text = html.escape(text_part)
-                html_parts.append(f'<span class="{css_class}">{escaped_text}</span>')
-        else:
-            # Handle sentence-level classification
-            css_class = result["label"]
-            escaped_text = html.escape(sentence)
-            html_parts.append(f'<span class="{css_class}">{escaped_text}</span> ')
+    # Check if we have webpage structure to preserve
+    if webpage_data and webpage_data.get('structure'):
+        # Use structure-aware rendering for HTML
+        structured_html = _generate_html_with_structure(sentences, results, webpage_data)
+        html_parts.append(structured_html)
+    else:
+        # Use simple sentence-by-sentence rendering
+        for result in results:
+            idx = result["idx"]
+            sentence = sentences[idx]["content"]
+            
+            if "spans" in result:
+                # Handle phrase-level spans
+                for span in result["spans"]:
+                    text_part = sentence[span["start"]:span["end"]]
+                    css_class = span["label"]  # 'info', 'promo', or 'risk'
+                    escaped_text = html.escape(text_part)
+                    html_parts.append(f'<span class="{css_class}">{escaped_text}</span>')
+            else:
+                # Handle sentence-level classification
+                css_class = result["label"]
+                escaped_text = html.escape(sentence)
+                html_parts.append(f'<span class="{css_class}">{escaped_text}</span> ')
     
     html_parts.extend([
         '</div>',
@@ -273,29 +287,36 @@ def _generate_docx_content(sentences: List[Dict[str, Any]], results: List[Dict[s
     
     # Add classified content
     doc.add_heading('Classified Content', level=2)
-    content_para = doc.add_paragraph()
     
-    # Color mapping for Word highlighting
-    color_map = {
-        'info': WD_COLOR_INDEX.TURQUOISE,
-        'promo': WD_COLOR_INDEX.PINK, 
-        'risk': WD_COLOR_INDEX.BRIGHT_GREEN
-    }
-    
-    for result in results:
-        idx = result["idx"]
-        sentence = sentences[idx]["content"]
+    # Check if we have webpage structure to preserve
+    if webpage_data and webpage_data.get('structure'):
+        # Use structure-aware rendering for DOCX
+        _generate_docx_with_structure(doc, sentences, results, webpage_data)
+    else:
+        # Use simple paragraph approach
+        content_para = doc.add_paragraph()
         
-        if "spans" in result:
-            # Handle phrase-level spans
-            for span in result["spans"]:
-                text_part = sentence[span["start"]:span["end"]]
-                run = content_para.add_run(text_part)
-                run.font.highlight_color = color_map[span["label"]]
-        else:
-            # Handle sentence-level classification
-            run = content_para.add_run(sentence + " ")
-            run.font.highlight_color = color_map[result["label"]]
+        # Color mapping for Word highlighting
+        color_map = {
+            'info': WD_COLOR_INDEX.TURQUOISE,
+            'promo': WD_COLOR_INDEX.PINK, 
+            'risk': WD_COLOR_INDEX.BRIGHT_GREEN
+        }
+        
+        for result in results:
+            idx = result["idx"]
+            sentence = sentences[idx]["content"]
+            
+            if "spans" in result:
+                # Handle phrase-level spans
+                for span in result["spans"]:
+                    text_part = sentence[span["start"]:span["end"]]
+                    run = content_para.add_run(text_part)
+                    run.font.highlight_color = color_map[span["label"]]
+            else:
+                # Handle sentence-level classification
+                run = content_para.add_run(sentence + " ")
+                run.font.highlight_color = color_map[result["label"]]
     
     # Save to BytesIO
     buffer = BytesIO()
@@ -355,6 +376,301 @@ def _rtf_escape(text: str) -> str:
             result.append(char)
     
     return ''.join(result)
+
+def _generate_rtf_with_structure(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
+                               webpage_data: Dict[str, Any]) -> str:
+    """Generate RTF content preserving webpage structure"""
+    from bs4 import BeautifulSoup
+    
+    structure_html = webpage_data.get('structure', '')
+    if not structure_html:
+        return ""
+    
+    # Build classification lookup
+    classification_map = _build_classification_map(sentences, results)
+    
+    # Parse structure
+    soup = BeautifulSoup(structure_html, 'html.parser')
+    
+    # Convert HTML structure to RTF while preserving layout
+    rtf_parts = []
+    _convert_html_to_rtf(soup, classification_map, rtf_parts)
+    
+    return "".join(rtf_parts)
+
+def _generate_html_with_structure(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
+                                 webpage_data: Dict[str, Any]) -> str:
+    """Generate HTML content preserving webpage structure"""
+    from bs4 import BeautifulSoup
+    
+    structure_html = webpage_data.get('structure', '')
+    if not structure_html:
+        return ""
+    
+    # Build classification lookup
+    classification_map = _build_classification_map(sentences, results)
+    
+    # Parse and apply classifications to structure
+    soup = BeautifulSoup(structure_html, 'html.parser')
+    _apply_classifications_to_dom(soup, classification_map)
+    
+    return str(soup)
+
+def _generate_docx_with_structure(doc, sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
+                                 webpage_data: Dict[str, Any]):
+    """Generate DOCX content preserving webpage structure"""
+    from bs4 import BeautifulSoup
+    from docx.enum.text import WD_COLOR_INDEX
+    
+    structure_html = webpage_data.get('structure', '')
+    if not structure_html:
+        return
+    
+    # Build classification lookup
+    classification_map = _build_classification_map(sentences, results)
+    
+    # Parse structure
+    soup = BeautifulSoup(structure_html, 'html.parser')
+    
+    # Color mapping
+    color_map = {
+        'info': WD_COLOR_INDEX.TURQUOISE,
+        'promo': WD_COLOR_INDEX.PINK, 
+        'risk': WD_COLOR_INDEX.BRIGHT_GREEN
+    }
+    
+    # Convert HTML elements to Word elements
+    _convert_html_to_docx(soup, doc, classification_map, color_map)
+
+def _build_classification_map(sentences: List[Dict[str, Any]], 
+                            results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build a lookup map for applying classifications"""
+    classification_map = {}
+    
+    for result in results:
+        idx = result["idx"]
+        sentence = sentences[idx]["content"]
+        
+        # Store both the original text and its classification
+        classification_map[sentence] = result
+        classification_map[sentence.lower()] = result
+        
+        # Also store sentence fragments for partial matching
+        if len(sentence) > 50:
+            words = sentence.split()
+            if len(words) > 3:
+                # Create fragment keys for better matching
+                start_fragment = ' '.join(words[:3])
+                end_fragment = ' '.join(words[-3:])
+                classification_map[start_fragment] = result
+                classification_map[end_fragment] = result
+    
+    return classification_map
+
+def _apply_classifications_to_dom(element, classification_map: Dict[str, Any]):
+    """Walk through DOM elements and apply classifications (same as in rendering.py)"""
+    from bs4 import BeautifulSoup, NavigableString
+    
+    color_map = {"info": "lightblue", "promo": "lightcoral", "risk": "lightgreen"}
+    
+    if isinstance(element, NavigableString):
+        return
+    
+    # Process text nodes
+    for child in list(element.children):
+        if isinstance(child, NavigableString):
+            text_content = str(child).strip()
+            if text_content and len(text_content) > 10:  # Only process substantial text
+                # Try to find classification for this text
+                result = _find_text_classification(text_content, classification_map)
+                
+                if result:
+                    # Apply classification
+                    if "spans" in result:
+                        # Use phrase-level classification
+                        classified_html = _apply_spans_to_text(text_content, result["spans"], color_map)
+                    else:
+                        # Use sentence-level classification
+                        color = color_map.get(result["label"], "lightgray")
+                        escaped_text = html.escape(text_content)
+                        classified_html = f'<span style="background-color: {color};">{escaped_text}</span>'
+                    
+                    # Replace text with classified version
+                    new_soup = BeautifulSoup(classified_html, 'html.parser')
+                    child.replace_with(new_soup)
+        else:
+            # Recursively process child elements
+            _apply_classifications_to_dom(child, classification_map)
+
+def _find_text_classification(text: str, classification_map: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Find the best classification match for a piece of text"""
+    # Try exact match first
+    result = classification_map.get(text) or classification_map.get(text.lower())
+    if result:
+        return result
+    
+    # Try partial matching for longer texts
+    if len(text) > 30:
+        words = text.lower().split()
+        if len(words) > 3:
+            # Try matching start and end fragments
+            start_fragment = ' '.join(words[:3])
+            end_fragment = ' '.join(words[-3:])
+            
+            result = classification_map.get(start_fragment) or classification_map.get(end_fragment)
+            if result:
+                return result
+    
+    # Try substring matching (less precise but catches more cases)
+    text_lower = text.lower()
+    for key, result in classification_map.items():
+        if isinstance(key, str) and len(key) > 20:
+            if key.lower() in text_lower or text_lower in key.lower():
+                return result
+    
+    return None
+
+def _apply_spans_to_text(text: str, spans: List[Dict[str, Any]], 
+                        color_map: Dict[str, str]) -> str:
+    """Apply phrase-level span classifications to text"""
+    if not spans:
+        return html.escape(text)
+    
+    # Sort spans by start position
+    sorted_spans = sorted(spans, key=lambda x: x['start'])
+    
+    result_html = ""
+    for span in sorted_spans:
+        start, end, label = span['start'], span['end'], span['label']
+        
+        # Ensure bounds are valid for current text
+        if start >= len(text) or end > len(text) or start >= end:
+            continue
+            
+        span_text = text[start:end]
+        color = color_map.get(label, "lightgray")
+        escaped_text = html.escape(span_text)
+        result_html += f'<span style="background-color: {color};">{escaped_text}</span>'
+    
+    return result_html if result_html else html.escape(text)
+
+def _convert_html_to_rtf(element, classification_map: Dict[str, Any], rtf_parts: List[str]):
+    """Convert HTML elements to RTF format while preserving structure"""
+    from bs4 import NavigableString
+    
+    if isinstance(element, NavigableString):
+        text_content = str(element).strip()
+        if text_content:
+            # Try to find classification for this text
+            result = _find_text_classification(text_content, classification_map)
+            
+            if result:
+                if "spans" in result:
+                    # Handle phrase-level spans
+                    for span in result["spans"]:
+                        text_part = text_content[span["start"]:span["end"]]
+                        color_code = _get_rtf_color_code(span["label"])
+                        escaped_text = _rtf_escape(text_part)
+                        rtf_parts.append(f"{{\\highlight{color_code} {escaped_text}}}")
+                else:
+                    # Handle sentence-level classification
+                    color_code = _get_rtf_color_code(result["label"])
+                    escaped_text = _rtf_escape(text_content)
+                    rtf_parts.append(f"{{\\highlight{color_code} {escaped_text}}}")
+            else:
+                # No classification, add as plain text
+                rtf_parts.append(_rtf_escape(text_content))
+        return
+    
+    # Handle HTML elements
+    tag_name = element.name.lower() if element.name else ""
+    
+    # Add appropriate RTF formatting based on HTML tag
+    if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+        rtf_parts.append("\\par{\\b ")
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+        rtf_parts.append("}\\par")
+    elif tag_name == 'p':
+        rtf_parts.append("\\par")
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+        rtf_parts.append("\\par")
+    elif tag_name in ['div', 'section', 'article']:
+        rtf_parts.append("\\par")
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+        rtf_parts.append("\\par")
+    elif tag_name in ['ul', 'ol']:
+        rtf_parts.append("\\par")
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+        rtf_parts.append("\\par")
+    elif tag_name == 'li':
+        rtf_parts.append("\\par• ")
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+    else:
+        # For other elements, just process children
+        for child in element.children:
+            _convert_html_to_rtf(child, classification_map, rtf_parts)
+
+def _convert_html_to_docx(element, doc, classification_map: Dict[str, Any], color_map: Dict[str, Any]):
+    """Convert HTML elements to DOCX format while preserving structure"""
+    from bs4 import NavigableString
+    from docx.enum.text import WD_COLOR_INDEX
+    
+    if isinstance(element, NavigableString):
+        return
+    
+    tag_name = element.name.lower() if element.name else ""
+    
+    # Handle different HTML elements
+    if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+        level = int(tag_name[1])
+        heading_text = element.get_text().strip()
+        if heading_text:
+            doc.add_heading(heading_text, level=min(level, 3))
+    elif tag_name == 'p':
+        para_text = element.get_text().strip()
+        if para_text:
+            para = doc.add_paragraph()
+            _add_classified_text_to_paragraph(para, para_text, classification_map, color_map)
+    elif tag_name in ['div', 'section', 'article']:
+        # Process children elements
+        for child in element.children:
+            _convert_html_to_docx(child, doc, classification_map, color_map)
+    elif tag_name in ['ul', 'ol']:
+        # Handle lists
+        for li in element.find_all('li', recursive=False):
+            li_text = li.get_text().strip()
+            if li_text:
+                para = doc.add_paragraph(style='List Bullet' if tag_name == 'ul' else 'List Number')
+                _add_classified_text_to_paragraph(para, li_text, classification_map, color_map)
+    else:
+        # For other elements, process children
+        for child in element.children:
+            _convert_html_to_docx(child, doc, classification_map, color_map)
+
+def _add_classified_text_to_paragraph(paragraph, text: str, classification_map: Dict[str, Any], color_map: Dict[str, Any]):
+    """Add classified text to a Word paragraph with highlighting"""
+    # Try to find classification for this text
+    result = _find_text_classification(text, classification_map)
+    
+    if result:
+        if "spans" in result:
+            # Handle phrase-level spans
+            for span in result["spans"]:
+                text_part = text[span["start"]:span["end"]]
+                run = paragraph.add_run(text_part)
+                run.font.highlight_color = color_map[span["label"]]
+        else:
+            # Handle sentence-level classification
+            run = paragraph.add_run(text)
+            run.font.highlight_color = color_map[result["label"]]
+    else:
+        # No classification, add as plain text
+        paragraph.add_run(text)
 
 def get_google_docs_import_instructions() -> str:
     """Return instructions for importing into Google Docs"""
