@@ -79,20 +79,20 @@ def _generate_rtf_content(sentences: List[Dict[str, Any]], results: List[Dict[st
     if webpage_data and webpage_data.get('success'):
         rtf_content.extend([
             r"{\b Source Information:}\par",
-            f"Title: {_rtf_escape(webpage_data.get('title', ''))}\par",
+            f"Title: {_rtf_escape(webpage_data.get('title', ''))}\\par",
         ])
         if webpage_data.get('url'):
-            rtf_content.append(f"URL: {_rtf_escape(webpage_data['url'])}\par")
+            rtf_content.append(f"URL: {_rtf_escape(webpage_data['url'])}\\par")
         rtf_content.append(r"\par")
     
     # Add statistics
     stats = _calculate_statistics(sentences, results)
     rtf_content.extend([
         r"{\b Classification Summary:}\par",
-        f"Informational: {stats['info_pct']}% ({stats['info_count']} characters)\par",
-        f"Promotional: {stats['promo_pct']}% ({stats['promo_count']} characters)\par", 
-        f"Risk Warning: {stats['risk_pct']}% ({stats['risk_count']} characters)\par",
-        f"Total Items: {stats['total_items']}\par\par"
+        f"Informational: {stats['info_pct']}% ({stats['info_count']} characters)\\par",
+        f"Promotional: {stats['promo_pct']}% ({stats['promo_count']} characters)\\par", 
+        f"Risk Warning: {stats['risk_pct']}% ({stats['risk_count']} characters)\\par",
+        f"Total Items: {stats['total_items']}\\par\\par"
     ])
     
     # Add legend
