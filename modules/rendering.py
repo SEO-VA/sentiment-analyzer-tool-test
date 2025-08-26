@@ -4,6 +4,7 @@ import html
 import streamlit as st
 from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup, Tag, NavigableString
+from modules.google_docs_generator import generate_google_docs_files, get_google_docs_import_instructions
 
 def show_content_percentages(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]]):
     """Calculate and display content breakdown percentages"""
@@ -65,12 +66,11 @@ def render_results(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]
     # Display the rendered content
     st.markdown(html_content, unsafe_allow_html=True)
 
-from modules.pdf_generator import generate_pdf_from_html, check_pdf_dependencies
-
 def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
                           webpage_data: Optional[Dict[str, Any]] = None):
     """
-    Generate downloadable HTML and PDF files with classification results
+    Generate downloadable files with classification results
+    Focus on HTML and Google Docs import formats
     """
     if webpage_data and webpage_data.get('success'):
         # Generate webpage-style HTML
@@ -86,54 +86,17 @@ def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[s
     filename_base = re.sub(r'[^\w\s-]', '', filename_base)
     filename_base = re.sub(r'[-\s]+', '-', filename_base)
     
-    # Check PDF availability with improved diagnostics
-    pdf_status = check_pdf_dependencies()
-    
     # Show download options
     st.subheader("Download Options")
     
-    if pdf_status['available']:
-        # Create download buttons for both formats
-        col1, col2 = st.columns(2)
+    # Create tabs for different download types
+    tab1, tab2 = st.tabs(["📄 Standard HTML", "📝 Google Docs Import"])
+    
+    with tab1:
+        # Standard HTML download
+        st.markdown("### 🌐 HTML Download")
+        st.markdown("Standard HTML file with full color highlighting - works in any browser.")
         
-        with col1:
-            st.download_button(
-                label="📄 Download HTML",
-                data=html_content,
-                file_name=f"{filename_base}.html",
-                mime="text/html",
-                help="HTML file with full color highlighting and formatting"
-            )
-        
-        with col2:
-            # Show PDF generation method info
-            method = pdf_status.get('primary_method', 'unknown')
-            pdf_label = f"📑 Download PDF ({method})"
-            
-            # Generate PDF
-            try:
-                with st.spinner("Generating PDF..."):
-                    pdf_content = generate_pdf_from_html(html_content)
-                
-                st.download_button(
-                    label=pdf_label,
-                    data=pdf_content,
-                    file_name=f"{filename_base}.pdf",
-                    mime="application/pdf",
-                    help=f"PDF generated using {method}"
-                )
-                
-                # Show success info
-                if method == 'reportlab':
-                    st.info("📝 PDF generated with simplified formatting (colors not supported)")
-                else:
-                    st.success("✅ PDF generated with full formatting")
-                    
-            except Exception as e:
-                st.error(f"❌ PDF generation failed: {str(e)}")
-                st.info("💡 HTML download is still available above")
-    else:
-        # Only HTML download available
         st.download_button(
             label="📄 Download HTML",
             data=html_content,
@@ -142,42 +105,75 @@ def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[s
             help="HTML file with full color highlighting and formatting"
         )
         
-        # Show detailed PDF unavailability notice
-        _show_pdf_unavailability_info(pdf_status)
+        st.info("💡 **Tip:** Open the HTML file in any browser and use 'Print to PDF' for a PDF version.")
+    
+    with tab2:
+        # Google Docs optimized downloads
+        st.markdown("### 🎯 Perfect for Google Docs Import")
+        st.markdown("These formats preserve **all colors and formatting** when imported to Google Docs!")
+        
+        try:
+            # Generate Google Docs files
+            with st.spinner("Generating Google Docs files..."):
+                google_files = generate_google_docs_files(sentences, results, webpage_data)
+            
+            # Create download columns based on available formats
+            cols = st.columns(len(google_files))
+            
+            for i, (format_name, file_content) in enumerate(google_files.items()):
+                with cols[i]:
+                    format_labels = {
+                        'rtf': '📝 RTF (Best Colors)',
+                        'html': '🌐 HTML (Google Optimized)', 
+                        'docx': '📄 Word Document'
+                    }
+                    
+                    format_help = {
+                        'rtf': 'Rich Text Format - preserves colors perfectly in Google Docs',
+                        'html': 'HTML optimized for Google Docs import',
+                        'docx': 'Microsoft Word format with highlighting'
+                    }
+                    
+                    label = format_labels.get(format_name, format_name.upper())
+                    help_text = format_help.get(format_name, f'{format_name.upper()} format')
+                    
+                    st.download_button(
+                        label=label,
+                        data=file_content,
+                        file_name=f"{filename_base}.{format_name}",
+                        mime=_get_mime_type(format_name),
+                        help=help_text
+                    )
+            
+            # Show import instructions
+            with st.expander("📋 How to Import to Google Docs", expanded=False):
+                instructions = get_google_docs_import_instructions()
+                st.markdown(instructions)
+                
+                # Add visual guide
+                st.markdown("### 🎨 What You'll Get:")
+                st.markdown("""
+                - ✅ **Perfect color preservation** - All highlighting maintained
+                - ✅ **Professional formatting** - Statistics, legends, proper layout  
+                - ✅ **Editable in Google Docs** - Modify, share, collaborate normally
+                - ✅ **High-quality PDF export** - Use Google Docs' Print to PDF
+                """)
+                
+            # Success message
+            st.success("✨ **Recommended:** Download RTF format for best results in Google Docs!")
+                
+        except Exception as e:
+            st.error(f"Google Docs file generation failed: {str(e)}")
+            st.info("Standard HTML download is still available in the other tab.")
 
-def _show_pdf_unavailability_info(pdf_status: Dict[str, Any]):
-    """Show detailed information about why PDF generation is unavailable"""
-    with st.expander("📋 PDF Generation Status", expanded=False):
-        if pdf_status.get('system_dependencies_missing'):
-            st.warning(
-                "⚠️ **PDF generation partially available**\n\n"
-                "The PDF libraries are installed, but system dependencies are missing. "
-                "This is common on cloud platforms like Streamlit Cloud."
-            )
-        elif pdf_status.get('missing_packages'):
-            missing = pdf_status['missing_packages']
-            st.warning(
-                f"⚠️ **PDF generation unavailable**\n\n"
-                f"Missing packages: {', '.join(missing)}\n\n"
-                f"To enable PDF generation, install:\n"
-                f"```\npip install {' '.join(missing)}\n```"
-            )
-        else:
-            st.error("❌ **PDF generation unavailable**\n\nNo working PDF libraries found.")
-        
-        # Show what was tested
-        if pdf_status.get('methods'):
-            st.info(f"✅ **Working methods:** {', '.join(pdf_status['methods'])}")
-        
-        # Show error details if available
-        if pdf_status.get('error_message'):
-            st.code(pdf_status['error_message'])
-        
-        # Show workaround
-        st.markdown(
-            "💡 **Workaround:** Download the HTML file instead. "
-            "You can open it in any browser and use 'Print to PDF' for a PDF version."
-        )
+def _get_mime_type(format_name: str) -> str:
+    """Get MIME type for file format"""
+    mime_types = {
+        'rtf': 'application/rtf',
+        'html': 'text/html',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+    return mime_types.get(format_name, 'application/octet-stream')
 
 def _show_legend():
     """Display color legend"""
