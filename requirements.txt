@@ -13,7 +13,13 @@ lxml>=4.9.0
 selenium>=4.15.0
 webdriver-manager>=3.8.0
 
-# PDF generation (multiple options for different environments)
+# PDF generation with fallback options
+# Primary: WeasyPrint (best quality, needs system deps)
 weasyprint>=60.0
+
+# Fallback: ReportLab (pure Python, always works)
 reportlab>=4.0.0
-# pdfkit>=1.0.0  # Uncomment if wkhtmltopdf is available
+
+# Additional fallback options (uncomment if needed)
+# pdfkit>=1.0.0  # Requires wkhtmltopdf system binary
+# xhtml2pdf>=0.2.0  # Pure Python but limited CSS support

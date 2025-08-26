@@ -86,8 +86,11 @@ def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[s
     filename_base = re.sub(r'[^\w\s-]', '', filename_base)
     filename_base = re.sub(r'[-\s]+', '-', filename_base)
     
-    # Check PDF availability
+    # Check PDF availability with improved diagnostics
     pdf_status = check_pdf_dependencies()
+    
+    # Show download options
+    st.subheader("Download Options")
     
     if pdf_status['available']:
         # Create download buttons for both formats
@@ -95,41 +98,86 @@ def generate_html_download(sentences: List[Dict[str, Any]], results: List[Dict[s
         
         with col1:
             st.download_button(
-                label="Download HTML",
+                label="📄 Download HTML",
                 data=html_content,
                 file_name=f"{filename_base}.html",
-                mime="text/html"
+                mime="text/html",
+                help="HTML file with full color highlighting and formatting"
             )
         
         with col2:
+            # Show PDF generation method info
+            method = pdf_status.get('primary_method', 'unknown')
+            pdf_label = f"📑 Download PDF ({method})"
+            
             # Generate PDF
             try:
-                pdf_content = generate_pdf_from_html(html_content)
+                with st.spinner("Generating PDF..."):
+                    pdf_content = generate_pdf_from_html(html_content)
+                
                 st.download_button(
-                    label="Download PDF",
+                    label=pdf_label,
                     data=pdf_content,
                     file_name=f"{filename_base}.pdf",
-                    mime="application/pdf"
+                    mime="application/pdf",
+                    help=f"PDF generated using {method}"
                 )
+                
+                # Show success info
+                if method == 'reportlab':
+                    st.info("📝 PDF generated with simplified formatting (colors not supported)")
+                else:
+                    st.success("✅ PDF generated with full formatting")
+                    
             except Exception as e:
-                st.error(f"PDF generation failed: {str(e)}")
-                st.info("HTML download is still available above.")
+                st.error(f"❌ PDF generation failed: {str(e)}")
+                st.info("💡 HTML download is still available above")
     else:
         # Only HTML download available
         st.download_button(
-            label="Download HTML",
+            label="📄 Download HTML",
             data=html_content,
             file_name=f"{filename_base}.html",
-            mime="text/html"
+            mime="text/html",
+            help="HTML file with full color highlighting and formatting"
         )
         
-        # Show PDF unavailability notice
-        with st.expander("PDF Download Not Available", expanded=False):
-            st.warning("PDF generation requires additional dependencies.")
-            if pdf_status['missing_packages']:
-                st.write("Missing packages:", ", ".join(pdf_status['missing_packages']))
-            if pdf_status['error_message']:
-                st.code(pdf_status['error_message'])
+        # Show detailed PDF unavailability notice
+        _show_pdf_unavailability_info(pdf_status)
+
+def _show_pdf_unavailability_info(pdf_status: Dict[str, Any]):
+    """Show detailed information about why PDF generation is unavailable"""
+    with st.expander("📋 PDF Generation Status", expanded=False):
+        if pdf_status.get('system_dependencies_missing'):
+            st.warning(
+                "⚠️ **PDF generation partially available**\n\n"
+                "The PDF libraries are installed, but system dependencies are missing. "
+                "This is common on cloud platforms like Streamlit Cloud."
+            )
+        elif pdf_status.get('missing_packages'):
+            missing = pdf_status['missing_packages']
+            st.warning(
+                f"⚠️ **PDF generation unavailable**\n\n"
+                f"Missing packages: {', '.join(missing)}\n\n"
+                f"To enable PDF generation, install:\n"
+                f"```\npip install {' '.join(missing)}\n```"
+            )
+        else:
+            st.error("❌ **PDF generation unavailable**\n\nNo working PDF libraries found.")
+        
+        # Show what was tested
+        if pdf_status.get('methods'):
+            st.info(f"✅ **Working methods:** {', '.join(pdf_status['methods'])}")
+        
+        # Show error details if available
+        if pdf_status.get('error_message'):
+            st.code(pdf_status['error_message'])
+        
+        # Show workaround
+        st.markdown(
+            "💡 **Workaround:** Download the HTML file instead. "
+            "You can open it in any browser and use 'Print to PDF' for a PDF version."
+        )
 
 def _show_legend():
     """Display color legend"""
@@ -353,14 +401,6 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
         <h3>Classification Summary</h3>
         <div class="stats-grid">
             <div class="stat-item">
-                <div class="stat-number" style="color:#0066cc">{info_count}</div>
-                <div class="stat-label">Informational ({info_pct}%)</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
-                <div class="stat-label">Promotional ({promo_pct}%)</div>
-            </div>
-            <div class="stat-item">
                 <div class="stat-number" style="color:#cc4400">{risk_count}</div>
                 <div class="stat-label">Risk Warning ({risk_pct}%)</div>
             </div>
@@ -546,4 +586,12 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
 </body>
 </html>"""
     
-    return html_template
+    return html_template="color:#0066cc">{info_count}</div>
+                <div class="stat-label">Informational ({info_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
+                <div class="stat-label">Promotional ({promo_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style
