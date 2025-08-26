@@ -367,31 +367,35 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
     promo_pct = round((char_counts["promo"] / total_chars) * 100, 1) if total_chars > 0 else 0
     risk_pct = round((char_counts["risk"] / total_chars) * 100, 1) if total_chars > 0 else 0
     
-    html_content = """<!DOCTYPE html>
+    # Build the HTML content with string formatting
+    html_parts = []
+    
+    # HTML header
+    html_parts.append("""<!DOCTYPE html>
 <html>
 <head>
     <title>Classification Results</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
-        .stats {{ 
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .stats { 
             background-color: #f8f9fa; 
             padding: 15px; 
             border-radius: 5px; 
             margin-bottom: 20px;
             border: 1px solid #dee2e6;
-        }}
-        .stats h3 {{ margin-top: 0; margin-bottom: 15px; }}
-        .stats-grid {{ 
+        }
+        .stats h3 { margin-top: 0; margin-bottom: 15px; }
+        .stats-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
             gap: 15px; 
-        }}
-        .stat-item {{ text-align: center; }}
-        .stat-number {{ font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }}
-        .stat-label {{ font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }}
-        .legend {{ margin-bottom: 20px; }}
-        .legend span {{ padding: 2px 6px; margin-right: 10px; border-radius: 3px; }}
-        .content {{ margin-top: 20px; }}
+        }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+        .legend { margin-bottom: 20px; }
+        .legend span { padding: 2px 6px; margin-right: 10px; border-radius: 3px; }
+        .content { margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -401,11 +405,29 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
         <h3>Classification Summary</h3>
         <div class="stats-grid">
             <div class="stat-item">
-                <div class="stat-number" style="color:#cc4400">{risk_count}</div>
+                <div class="stat-number" style="color:#0066cc">""")
+    
+    # Add statistics
+    html_parts.append(str(char_counts["info"]))
+    html_parts.append(f"""</div>
+                <div class="stat-label">Informational ({info_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#00aa44">""")
+    html_parts.append(str(char_counts["promo"]))
+    html_parts.append(f"""</div>
+                <div class="stat-label">Promotional ({promo_pct}%)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" style="color:#cc4400">""")
+    html_parts.append(str(char_counts["risk"]))
+    html_parts.append(f"""</div>
                 <div class="stat-label">Risk Warning ({risk_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number">{total_items}</div>
+                <div class="stat-number">""")
+    html_parts.append(str(len(results)))
+    html_parts.append("""</div>
                 <div class="stat-label">Total Items</div>
             </div>
         </div>
@@ -417,16 +439,9 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
         <span style="background-color: lightcoral;">Promo</span>
         <span style="background-color: lightgreen;">Risk</span>
     </div>
-    <div class="content">""".format(
-        info_count=char_counts["info"],
-        promo_count=char_counts["promo"], 
-        risk_count=char_counts["risk"],
-        info_pct=info_pct,
-        promo_pct=promo_pct,
-        risk_pct=risk_pct,
-        total_items=len(results)
-    )
+    <div class="content">""")
     
+    # Add classified content
     for result in results:
         idx = result["idx"]
         sentence = sentences[idx]["content"]
@@ -436,16 +451,18 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
                 text_part = sentence[span["start"]:span["end"]]
                 color = color_map[span["label"]]
                 escaped_text = html.escape(text_part)
-                html_content += f'<span style="background-color: {color};">{escaped_text}</span>'
+                html_parts.append(f'<span style="background-color: {color};">{escaped_text}</span>')
         else:
             color = color_map[result["label"]]
             escaped_text = html.escape(sentence)
-            html_content += f'<span style="background-color: {color};">{escaped_text}</span>'
+            html_parts.append(f'<span style="background-color: {color};">{escaped_text}</span>')
         
-        html_content += " "
+        html_parts.append(" ")
     
-    html_content += """</div></body></html>"""
-    return html_content
+    # Close HTML
+    html_parts.append("</div></body></html>")
+    
+    return ''.join(html_parts)
 
 def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[str, Any]], 
                           webpage_data: Dict[str, Any]) -> str:
@@ -474,11 +491,13 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
     # Get classified content
     content_html = _render_webpage_structure(sentences, results, webpage_data)
     
-    # Build HTML template using .format() to avoid f-string issues with nested braces
-    html_template = """<!DOCTYPE html>
+    # Build HTML using string concatenation to avoid formatting conflicts
+    html_parts = []
+    
+    html_parts.append(f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Content Classification: {title_escaped}</title>
+    <title>Content Classification: {html.escape(title)}</title>
     <style>
         body {{ 
             font-family: Arial, sans-serif; 
@@ -547,8 +566,12 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         <h1>Content Classification Results</h1>
         <div class="source-info">
             <h3>Source Page</h3>
-            <p><strong>Title:</strong> {title_escaped}</p>
-            {url_line}
+            <p><strong>Title:</strong> {html.escape(title)}</p>""")
+    
+    if url:
+        html_parts.append(f'<p><strong>URL:</strong> <a href="{html.escape(url)}" target="_blank">{html.escape(url)}</a></p>')
+    
+    html_parts.append(f"""
         </div>
     </div>
     
@@ -556,19 +579,19 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         <h3>Classification Summary</h3>
         <div class="stats-grid">
             <div class="stat-item">
-                <div class="stat-number" style="color:#0066cc">{info_count}</div>
+                <div class="stat-number" style="color:#0066cc">{char_counts["info"]}</div>
                 <div class="stat-label">Informational ({info_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
+                <div class="stat-number" style="color:#00aa44">{char_counts["promo"]}</div>
                 <div class="stat-label">Promotional ({promo_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number" style="color:#cc4400">{risk_count}</div>
+                <div class="stat-number" style="color:#cc4400">{char_counts["risk"]}</div>
                 <div class="stat-label">Risk Warning ({risk_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number">{total_items}</div>
+                <div class="stat-number">{len(results)}</div>
                 <div class="stat-label">Total Items</div>
             </div>
         </div>
@@ -585,25 +608,6 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         {content_html}
     </div>
 </body>
-</html>""".format(
-        title_escaped=html.escape(title),
-        url_line=f'<p><strong>URL:</strong> <a href="{html.escape(url)}" target="_blank">{html.escape(url)}</a></p>' if url else '',
-        info_count=char_counts["info"],
-        promo_count=char_counts["promo"], 
-        risk_count=char_counts["risk"],
-        info_pct=info_pct,
-        promo_pct=promo_pct,
-        risk_pct=risk_pct,
-        total_items=len(results),
-        content_html=content_html
-    )
+</html>""")
     
-    return html_template="color:#0066cc">{info_count}</div>
-                <div class="stat-label">Informational ({info_pct}%)</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
-                <div class="stat-label">Promotional ({promo_pct}%)</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number" style
+    return ''.join(html_parts)
