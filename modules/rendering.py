@@ -474,10 +474,11 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
     # Get classified content
     content_html = _render_webpage_structure(sentences, results, webpage_data)
     
-    html_template = f"""<!DOCTYPE html>
+    # Build HTML template using .format() to avoid f-string issues with nested braces
+    html_template = """<!DOCTYPE html>
 <html>
 <head>
-    <title>Content Classification: {html.escape(title)}</title>
+    <title>Content Classification: {title_escaped}</title>
     <style>
         body {{ 
             font-family: Arial, sans-serif; 
@@ -546,8 +547,8 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         <h1>Content Classification Results</h1>
         <div class="source-info">
             <h3>Source Page</h3>
-            <p><strong>Title:</strong> {html.escape(title)}</p>
-            {f'<p><strong>URL:</strong> <a href="{html.escape(url)}" target="_blank">{html.escape(url)}</a></p>' if url else ''}
+            <p><strong>Title:</strong> {title_escaped}</p>
+            {url_line}
         </div>
     </div>
     
@@ -555,19 +556,19 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         <h3>Classification Summary</h3>
         <div class="stats-grid">
             <div class="stat-item">
-                <div class="stat-number" style="color:#0066cc">{char_counts["info"]}</div>
+                <div class="stat-number" style="color:#0066cc">{info_count}</div>
                 <div class="stat-label">Informational ({info_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number" style="color:#00aa44">{char_counts["promo"]}</div>
+                <div class="stat-number" style="color:#00aa44">{promo_count}</div>
                 <div class="stat-label">Promotional ({promo_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number" style="color:#cc4400">{char_counts["risk"]}</div>
+                <div class="stat-number" style="color:#cc4400">{risk_count}</div>
                 <div class="stat-label">Risk Warning ({risk_pct}%)</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number">{len(results)}</div>
+                <div class="stat-number">{total_items}</div>
                 <div class="stat-label">Total Items</div>
             </div>
         </div>
@@ -584,7 +585,18 @@ def _generate_webpage_html(sentences: List[Dict[str, Any]], results: List[Dict[s
         {content_html}
     </div>
 </body>
-</html>"""
+</html>""".format(
+        title_escaped=html.escape(title),
+        url_line=f'<p><strong>URL:</strong> <a href="{html.escape(url)}" target="_blank">{html.escape(url)}</a></p>' if url else '',
+        info_count=char_counts["info"],
+        promo_count=char_counts["promo"], 
+        risk_count=char_counts["risk"],
+        info_pct=info_pct,
+        promo_pct=promo_pct,
+        risk_pct=risk_pct,
+        total_items=len(results),
+        content_html=content_html
+    )
     
     return html_template="color:#0066cc">{info_count}</div>
                 <div class="stat-label">Informational ({info_pct}%)</div>
