@@ -324,26 +324,26 @@ def _generate_simple_html(sentences: List[Dict[str, Any]], results: List[Dict[st
 <head>
     <title>Classification Results</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-        .stats { 
+        body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }}
+        .stats {{ 
             background-color: #f8f9fa; 
             padding: 15px; 
             border-radius: 5px; 
             margin-bottom: 20px;
             border: 1px solid #dee2e6;
-        }
-        .stats h3 { margin-top: 0; margin-bottom: 15px; }
-        .stats-grid { 
+        }}
+        .stats h3 {{ margin-top: 0; margin-bottom: 15px; }}
+        .stats-grid {{ 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
             gap: 15px; 
-        }
-        .stat-item { text-align: center; }
-        .stat-number { font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }
-        .stat-label { font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
-        .legend { margin-bottom: 20px; }
-        .legend span { padding: 2px 6px; margin-right: 10px; border-radius: 3px; }
-        .content { margin-top: 20px; }
+        }}
+        .stat-item {{ text-align: center; }}
+        .stat-number {{ font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; }}
+        .stat-label {{ font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }}
+        .legend {{ margin-bottom: 20px; }}
+        .legend span {{ padding: 2px 6px; margin-right: 10px; border-radius: 3px; }}
+        .content {{ margin-top: 20px; }}
     </style>
 </head>
 <body>
